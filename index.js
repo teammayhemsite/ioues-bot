@@ -16,15 +16,60 @@ const http = require("http");
 // Necessário para o Render Web Service
 // ==========================================
 
+const { sendDiscordLog } = require("./src/logger");
+
 const PORT = config.port;
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
+    // Configura headers padrão e CORS para integração segura com o site
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-aevix-secret");
 
-    res.writeHead(200, {
-        "Content-Type": "text/plain; charset=utf-8"
-    });
+    if (req.method === "OPTIONS") {
+        res.writeHead(204);
+        return res.end();
+    }
 
-    res.end(req.url === "/health" ? "OK" : "Bot online");
+    if (req.method === "GET" && (req.url === "/" || req.url === "/health")) {
+        res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+        return res.end("OK - Aevix Discord Bot Online");
+    }
+
+    // Endpoint seguro para receber logs do backend / site Aevix Keys
+    if (req.method === "POST" && req.url === "/api/log") {
+        // Validação de segurança via Secret configurado em AEVIX_LOG_SECRET se definido
+        const reqSecret = req.headers["x-aevix-secret"] || req.headers["authorization"]?.replace("Bearer ", "");
+        if (config.logApiSecret && reqSecret !== config.logApiSecret) {
+            res.writeHead(401, { "Content-Type": "application/json" });
+            return res.end(JSON.stringify({ error: "Unauthorized: Invalid log secret" }));
+        }
+
+        let body = "";
+        req.on("data", chunk => {
+            body += chunk;
+            if (body.length > 1e5) { // Proteção contra payloads grandes
+                req.destroy();
+            }
+        });
+
+        req.on("end", async () => {
+            try {
+                const logData = JSON.parse(body || "{}");
+                const sent = await sendDiscordLog(client, logData);
+
+                res.writeHead(sent ? 200 : 500, { "Content-Type": "application/json" });
+                return res.end(JSON.stringify({ success: sent }));
+            } catch (err) {
+                res.writeHead(400, { "Content-Type": "application/json" });
+                return res.end(JSON.stringify({ error: "Invalid JSON payload" }));
+            }
+        });
+        return;
+    }
+
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Not Found");
 });
 
 server.listen(PORT, "0.0.0.0", () => {
