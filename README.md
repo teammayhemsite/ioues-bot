@@ -1,29 +1,21 @@
-# Discord Bot (moderação + call 24/7)
+[README.md](https://github.com/user-attachments/files/33354756/README.md)
+# Discord Bot (Moderação + Call 24/7 + Logs do Aevix Keys)
 
-Bot de moderação/mensagens que também entra e **permanece em um canal de voz** automaticamente, com reconexão.
+Bot de moderação, permanência em canal de voz 24/7 e receptor seguro de logs de atividades do sistema **Aevix Keys**.
 
-## Configuração local
-1. Instale o [Node.js](https://nodejs.org) 20+.
-2. `npm install`
-3. Copie `.env.example` para `.env` e preencha `DISCORD_TOKEN`, `GUILD_ID`, `VOICE_CHANNEL_ID`, `CLIENT_ID` e `PORT`.
-4. Registre os slash commands no servidor: `npm run deploy`
-5. Inicie: `npm start`
+## Canal de Logs Configurado
 
-## Como descobrir os IDs
-Discord > Configurações > Avançado > ative **Modo Desenvolvedor**. Depois clique com o botão direito no **servidor** (GUILD_ID) ou no **canal de voz** (VOICE_CHANNEL_ID) > **Copiar ID**.
+- **Canal de destino:** `1558873432769298522` (padrão configurado em `LOG_CHANNEL_ID`).
+- Publica embeds estruturados nas cores verde, amarelo e vermelho com dados reais e formatação idêntica aos padrões de log de auditoria.
 
-## GitHub
-Envie: `index.js`, `deploy-commands.js`, `src/`, `commands/`, `package.json`, `package-lock.json`, `.gitignore`, `.env.example`, `README.md`.
-**Nunca** envie: `.env`, token, `node_modules/`.
+## Novas Variáveis de Ambiente no Render
 
-## Render
-1. New > **Web Service** > conecte o GitHub e escolha o repositório.
-2. Runtime: Node. **Build Command:** `npm install` — **Start Command:** `npm start`
-3. Em Environment Variables: `DISCORD_TOKEN`, `GUILD_ID`, `VOICE_CHANNEL_ID`, `CLIENT_ID`. (`PORT` o Render define sozinho.)
-4. Deploy.
+Além das variáveis que você já utilizava no Render:
+- `LOG_CHANNEL_ID`: `1558873432769298522` (opcional caso queira mudar no futuro).
+- `AEVIX_LOG_SECRET`: Segredo de autenticação HTTP opcional para proteger requisições de log contra acessos não autorizados.
 
-## UptimeRobot
-Monitor HTTP(s) apontando para `https://SEU-ENDERECO-DO-RENDER/` ou `https://SEU-ENDERECO-DO-RENDER/health`. O bot não depende dele para funcionar.
+## Endpoint de Auditoria HTTP
 
-## Permissões no Discord
-O bot precisa estar no servidor com **Ver Canal** e **Conectar** no canal de voz (além das permissões de moderação dos comandos). Intents usados: `Guilds` e `GuildVoiceStates` (nenhum privilegiado).
+O servidor HTTP integrado no bot expõe a rota `POST /api/log`:
+- Recebe eventos confirmados pelo painel e despacha instantaneamente para o canal de texto do Discord.
+- Trata requisições OPTIONS (CORS) e validação de tokens com proteção contra sobrecarga.
