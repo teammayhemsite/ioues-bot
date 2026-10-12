@@ -4,7 +4,8 @@ const { startVoice, stopVoice } = require("./src/voice");
 const {
     Client,
     GatewayIntentBits,
-    Collection
+    Collection,
+    EmbedBuilder
 } = require("discord.js");
 
 const fs = require("fs");
@@ -12,11 +13,93 @@ const path = require("path");
 const http = require("http");
 
 // ==========================================
+// SISTEMA DE LOGS DO AEVIX KEYS (INTEGRADO)
+// ==========================================
+const LOG_COLORS = {
+    SUCCESS: 0x38D39F, // Verde
+    WARNING: 0xE8B65A, // Amarelo/Dourado
+    DANGER: 0xEF4444,  // Vermelho
+    INFO: 0x5865F2,    // Azul Discord
+    NEUTRAL: 0x2B2D31  // Escuro
+};
+
+async function sendDiscordLog(client, logData) {
+    if (!client || !client.isReady()) {
+        console.warn("⚠️ [Aevix Logger] Discord client ainda não está pronto para enviar log.");
+        return false;
+    }
+
+    const channelId = config.logChannelId || process.env.LOG_CHANNEL_ID || "1558873432769298522";
+
+    try {
+        const channel = await client.channels.fetch(channelId).catch(() => null);
+        if (!channel || !channel.isTextBased()) {
+            console.error(`❌ [Aevix Logger] Canal de logs não encontrado ou sem permissão: ${channelId}`);
+            return false;
+        }
+
+        const {
+            title,
+            action,
+            user,
+            admin,
+            details,
+            status = "SUCCESS",
+            fields = [],
+            footer = "Aevix Security & Management"
+        } = logData;
+
+        const color = LOG_COLORS[status] || LOG_COLORS.INFO;
+
+        const embed = new EmbedBuilder()
+            .setColor(color)
+            .setTimestamp(new Date());
+
+        if (title) {
+            embed.setTitle(title);
+        }
+
+        embed.setAuthor({
+            name: `Aevix Keys • ${action || "Registro de Atividade"}`,
+            iconURL: client.user.displayAvatarURL()
+        });
+
+        if (user) {
+            embed.addFields({ name: "👤 Usuário", value: `\`${user}\``, inline: true });
+        }
+        if (admin) {
+            embed.addFields({ name: "🛡️ Administrador", value: `\`${admin}\``, inline: true });
+        }
+        if (action) {
+            embed.addFields({ name: "⚡ Ação", value: `${action}`, inline: true });
+        }
+
+        if (details) {
+            embed.addFields({ name: "📋 Detalhes", value: `${details}`, inline: false });
+        }
+
+        if (Array.isArray(fields) && fields.length > 0) {
+            embed.addFields(fields);
+        }
+
+        embed.setFooter({
+            text: `${footer} • ID: ${Math.floor(Date.now() / 1000)}`,
+            iconURL: client.user.displayAvatarURL()
+        });
+
+        await channel.send({ embeds: [embed] });
+        console.log(`✅ [Aevix Logger] Log enviado ao canal ${channelId}: ${action}`);
+        return true;
+    } catch (err) {
+        console.error("❌ [Aevix Logger] Erro ao enviar log para o Discord:", err.message);
+        return false;
+    }
+}
+
+// ==========================================
 // CONFIGURAÇÃO DO SERVIDOR HTTP
 // Necessário para o Render Web Service
 // ==========================================
-
-const { sendDiscordLog } = require("./src/logger");
 
 const PORT = config.port;
 
