@@ -281,63 +281,44 @@ function loadCommands(directory) {
 loadCommands(commandsPath);
 
 // ==========================================
-// BOT CONECTADO
+// BOT CONECTADO (Disparado quando o Discord conecta)
 // ==========================================
 
-client.once("clientReady", () => {
-
-    console.log("BOT ONLINE");
-    console.log("Discord conectado.");
+function onBotReady() {
     console.log("");
-
     console.log("========================================");
-    console.log("           BOT CONECTADO");
+    console.log("           BOT CONECTADO AO DISCORD");
     console.log("========================================");
-
-    console.log(
-        `🤖 Bot: ${client.user.tag}`
-    );
-
-    console.log(
-        `🆔 ID: ${client.user.id}`
-    );
-
-    console.log(
-        `🏠 Servidores: ${client.guilds.cache.size}`
-    );
-
-    console.log(
-        `⚡ Comandos: ${client.commands.size}`
-    );
-
-    console.log(
-        `🌐 Porta HTTP: ${PORT}`
-    );
-
+    console.log(`🤖 Bot: ${client.user.tag}`);
+    console.log(`🆔 ID: ${client.user.id}`);
+    console.log(`🏠 Servidores: ${client.guilds.cache.size}`);
+    console.log(`⚡ Comandos carregados: ${client.commands.size}`);
+    console.log(`🌐 Porta HTTP: ${PORT}`);
     console.log("========================================");
     console.log("");
 
-    // ==========================================
-    // STATUS DO BOT
-    // ==========================================
-
+    // Define status online e atividade
     client.user.setPresence({
-
         activities: [
             {
                 name: "Gerenciando o servidor",
                 type: 3
             }
         ],
-
         status: "online"
-
     });
 
     // Entra e permanece no canal de voz configurado
-    startVoice(client);
+    try {
+        startVoice(client);
+    } catch (err) {
+        console.error("❌ Erro ao iniciar voz:", err);
+    }
+}
 
-});
+// Escuta "ready" (padrão Discord.js v14) e fallback "clientReady"
+client.once("ready", onBotReady);
+client.once("clientReady", onBotReady);
 
 // ==========================================
 // INTERAÇÕES
@@ -346,30 +327,22 @@ client.once("clientReady", () => {
 client.on(
     "interactionCreate",
     async interaction => {
-
-        // ==========================================
         // SOMENTE COMANDOS SLASH
-        // ==========================================
-
         if (!interaction.isChatInputCommand()) {
             return;
         }
 
-        const command =
-            client.commands.get(
-                interaction.commandName
-            );
+        console.log(`⚡ [Comando] /${interaction.commandName} executado por ${interaction.user.tag} no canal #${interaction.channel?.name || interaction.channelId}`);
 
-        // ==========================================
+        const command = client.commands.get(interaction.commandName);
+
         // COMANDO NÃO ENCONTRADO
-        // ==========================================
-
         if (!command) {
-
-            console.log(
-                `⚠️ Comando não encontrado: ${interaction.commandName}`
-            );
-
+            console.log(`⚠️ Comando não encontrado: ${interaction.commandName}`);
+            await interaction.reply({
+                content: "❌ Este comando não está registrado ou foi desativado.",
+                ephemeral: true
+            }).catch(() => {});
             return;
         }
 
@@ -505,7 +478,17 @@ if (!config.token) {
 // LOGIN NO DISCORD
 // ==========================================
 
-client.login(config.token);
+console.log("🔑 Conectando ao Discord com o token configurado...");
+client.login(config.token)
+    .then(() => {
+        console.log("✅ Autenticação com a API do Discord realizada com sucesso!");
+    })
+    .catch(error => {
+        console.error("❌ ERRO FATAL AO FAZER LOGIN NO DISCORD:", error.message);
+        if (error.message.includes("An invalid token was provided")) {
+            console.error("👉 Verifique se o DISCORD_TOKEN no Render está com o token correto e atualizado.");
+        }
+    });
 
 // ==========================================
 // DESLIGAMENTO SEGURO (Render envia SIGTERM)
