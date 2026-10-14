@@ -1,3 +1,9 @@
+// Força resolução IPv4 no Node.js (evita que a conexão com a API do Discord congele no Render via IPv6)
+const dns = require("dns");
+if (dns.setDefaultResultOrder) {
+    dns.setDefaultResultOrder("ipv4first");
+}
+
 const config = require("./src/config");
 const { startVoice, stopVoice } = require("./src/voice");
 
@@ -478,8 +484,21 @@ if (!config.token) {
 // LOGIN NO DISCORD
 // ==========================================
 
+// Logs de debug do cliente para monitorar o status da conexão no Render
+client.on("debug", info => {
+    if (info.includes("Heartbeat") || info.includes("heartbeat")) return; // Não polui os logs
+    console.log(`🌐 [Discord] ${info}`);
+});
+
+client.on("warn", warning => {
+    console.warn(`⚠️ [Discord Aviso] ${warning}`);
+});
+
+// Sanitiza o token (remove possíveis espaços, aspas acidentais ou prefixo 'Bot ')
+const rawToken = config.token ? String(config.token).trim().replace(/^["']|["']$/g, '').replace(/^Bot\s+/i, '') : "";
+
 console.log("🔑 Conectando ao Discord com o token configurado...");
-client.login(config.token)
+client.login(rawToken)
     .then(() => {
         console.log("✅ Autenticação com a API do Discord realizada com sucesso!");
     })
