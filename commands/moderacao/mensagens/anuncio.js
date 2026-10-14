@@ -61,6 +61,10 @@ module.exports = {
         ),
 
     async execute(interaction) {
+        // Responde imediatamente ao Discord para evitar o timeout de 3 segundos ("O aplicativo não respondeu")
+        await interaction.deferReply({
+            ephemeral: true
+        });
 
         const titulo =
             interaction.options.getString("titulo");
@@ -81,10 +85,8 @@ module.exports = {
             interaction.options.getString("botao_url");
 
         if (cor && !/^#?[0-9A-Fa-f]{6}$/.test(cor)) {
-
-            return interaction.reply({
-                content: "❌ Cor inválida.",
-                ephemeral: true
+            return interaction.editReply({
+                content: "❌ Cor inválida. Use formato hexadecimal como `#5865F2`."
             });
         }
 
@@ -92,44 +94,47 @@ module.exports = {
             (botao && !botaoUrl) ||
             (!botao && botaoUrl)
         ) {
-
-            return interaction.reply({
-                content:
-                    "❌ Informe o texto e a URL do botão.",
-                ephemeral: true
+            return interaction.editReply({
+                content: "❌ Para adicionar um botão, informe o texto e a URL do botão."
             });
         }
 
-        const embed = createEmbed({
-            title: `📢 ${titulo}`,
-            description: mensagem,
-            color: cor || "#5865F2",
-            image: imagem,
-            author: interaction.guild.name,
-            authorIcon: interaction.guild.iconURL(),
-            footer: `Anúncio enviado por ${interaction.user.tag}`,
-            timestamp: true
-        });
+        try {
+            const embed = createEmbed({
+                title: `📢 ${titulo}`,
+                description: mensagem,
+                color: cor || "#5865F2",
+                image: imagem,
+                author: interaction.guild?.name || "Aevix",
+                authorIcon: interaction.guild?.iconURL(),
+                footer: `Anúncio enviado por ${interaction.user.tag}`,
+                timestamp: true
+            });
 
-        const components = createButtons(
-            botao && botaoUrl
-                ? [
-                    {
-                        label: botao,
-                        url: botaoUrl
-                    }
-                ]
-                : []
-        );
+            const components = createButtons(
+                botao && botaoUrl
+                    ? [
+                        {
+                            label: botao,
+                            url: botaoUrl
+                        }
+                    ]
+                    : []
+            );
 
-        await interaction.channel.send({
-            embeds: [embed],
-            components
-        });
+            await interaction.channel.send({
+                embeds: [embed],
+                components
+            });
 
-        await interaction.reply({
-            content: "✅ Anúncio enviado!",
-            ephemeral: true
-        });
+            await interaction.editReply({
+                content: "✅ Anúncio enviado com sucesso!"
+            });
+        } catch (error) {
+            console.error("❌ Erro ao enviar anúncio no canal:", error);
+            await interaction.editReply({
+                content: `❌ Não foi possível enviar o anúncio no canal. Verifique se o bot tem permissão de **Enviar Mensagens** e **Inserir Links** neste canal.`
+            });
+        }
     }
 };
