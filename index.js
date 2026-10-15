@@ -290,7 +290,12 @@ loadCommands(commandsPath);
 // BOT CONECTADO (Disparado quando o Discord conecta)
 // ==========================================
 
+let isBotReady = false;
+
 function onBotReady() {
+    if (isBotReady) return;
+    isBotReady = true;
+
     console.log("");
     console.log("========================================");
     console.log("           BOT CONECTADO AO DISCORD");
@@ -322,9 +327,9 @@ function onBotReady() {
     }
 }
 
-// Escuta "ready" (padrão Discord.js v14) e fallback "clientReady"
-client.once("ready", onBotReady);
+// Escuta evento de inicialização garantindo execução única
 client.once("clientReady", onBotReady);
+client.once("ready", onBotReady);
 
 // ==========================================
 // INTERAÇÕES
