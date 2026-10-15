@@ -494,8 +494,29 @@ client.on("warn", warning => {
     console.warn(`⚠️ [Discord Aviso] ${warning}`);
 });
 
+client.rest.on("response", (req, res) => {
+    console.log(`🌐 [Discord REST] ${req.method} ${req.path} -> Status ${res.status}`);
+});
+
+client.rest.on("rateLimited", rateLimitInfo => {
+    console.warn(`⏳ [Discord Rate Limit] Limite atingido na rota ${rateLimitInfo.route}. Aguardando ${rateLimitInfo.timeToReset}ms.`);
+});
+
 // Sanitiza o token (remove possíveis espaços, aspas acidentais ou prefixo 'Bot ')
 const rawToken = config.token ? String(config.token).trim().replace(/^["']|["']$/g, '').replace(/^Bot\s+/i, '') : "";
+
+// Teste de conectividade direta com a API do Discord
+const https = require("https");
+const reqTest = https.get("https://discord.com/api/v10/gateway", { timeout: 10000 }, (resTest) => {
+    console.log(`🌐 [Teste de Conexão] Acesso a discord.com/api/v10/gateway: HTTP ${resTest.statusCode}`);
+});
+reqTest.on("error", (err) => {
+    console.error(`❌ [Teste de Conexão] Não foi possível alcançar discord.com: ${err.message}`);
+});
+reqTest.on("timeout", () => {
+    reqTest.destroy();
+    console.error("❌ [Teste de Conexão] Tempo esgotado ao tentar alcançar discord.com (possível bloqueio de IP pelo Cloudflare ou falha de rota no host).");
+});
 
 console.log("🔑 Conectando ao Discord com o token configurado...");
 client.login(rawToken)
