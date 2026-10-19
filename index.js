@@ -292,7 +292,7 @@ loadCommands(commandsPath);
 
 let isBotReady = false;
 
-function onBotReady() {
+async function onBotReady() {
     if (isBotReady) return;
     isBotReady = true;
 
@@ -307,6 +307,26 @@ function onBotReady() {
     console.log(`🌐 Porta HTTP: ${PORT}`);
     console.log("========================================");
     console.log("");
+
+    // Registra/atualiza os comandos Slash automaticamente ao iniciar
+    try {
+        const commandsPayload = client.commands.map(cmd => cmd.data.toJSON());
+
+        if (config.guildId) {
+            const targetGuild = client.guilds.cache.get(config.guildId) || await client.guilds.fetch(config.guildId).catch(() => null);
+            if (targetGuild) {
+                await targetGuild.commands.set(commandsPayload);
+                console.log(`✅ ${commandsPayload.length} comandos registrados automaticamente no servidor (${targetGuild.name})!`);
+            }
+        } else {
+            for (const [, guild] of client.guilds.cache) {
+                await guild.commands.set(commandsPayload);
+                console.log(`✅ ${commandsPayload.length} comandos registrados automaticamente no servidor (${guild.name})!`);
+            }
+        }
+    } catch (err) {
+        console.error("❌ Erro ao registrar comandos automaticamente:", err);
+    }
 
     // Define status online e atividade
     client.user.setPresence({
