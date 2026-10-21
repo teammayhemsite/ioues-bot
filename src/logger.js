@@ -26,7 +26,7 @@ async function sendDiscordLog(client, logData) {
         return false;
     }
 
-    const channelId = config.logChannelId;
+    const channelId = logData?.channelId || config.logChannelId;
     if (!channelId) {
         console.warn("⚠️ [Aevix Logger] LOG_CHANNEL_ID não configurado.");
         return false;
