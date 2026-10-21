@@ -6,6 +6,7 @@ if (dns.setDefaultResultOrder) {
 
 const config = require("./src/config");
 const { startVoice, stopVoice } = require("./src/voice");
+const { startTagRoleManager, stopTagRoleManager } = require("./src/tagRoleManager");
 
 const {
     Client,
@@ -176,6 +177,7 @@ server.listen(PORT, "0.0.0.0", () => {
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,    // necessário para monitorar membros e tag do servidor (Server Members Intent)
         GatewayIntentBits.GuildVoiceStates // necessário para voz
     ]
 });
@@ -344,6 +346,13 @@ async function onBotReady() {
         startVoice(client);
     } catch (err) {
         console.error("❌ Erro ao iniciar voz:", err);
+    }
+
+    // Inicia o sistema automático de cargo por tag do servidor (primary_guild)
+    try {
+        startTagRoleManager(client);
+    } catch (err) {
+        console.error("❌ Erro ao iniciar gerenciamento de cargo por tag:", err);
     }
 }
 
@@ -553,6 +562,9 @@ client.login(rawToken)
         if (error.message.includes("An invalid token was provided")) {
             console.error("👉 Verifique se o DISCORD_TOKEN no Render está com o token correto e atualizado.");
         }
+        if (error.message.includes("Used disallowed intents")) {
+            console.error("👉 Ative a opção 'SERVER MEMBERS INTENT' em Discord Developer Portal -> Bot -> Privileged Gateway Intents.");
+        }
     });
 
 // ==========================================
@@ -562,6 +574,7 @@ client.login(rawToken)
 function shutdown(signal) {
     console.log(`${signal} recebido. Encerrando com segurança...`);
     try { stopVoice(); } catch {}
+    try { stopTagRoleManager(); } catch {}
     server.close();
     client.destroy();
     setTimeout(() => process.exit(0), 500).unref();
