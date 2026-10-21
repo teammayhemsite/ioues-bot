@@ -309,8 +309,9 @@ async function reconcileMemberTagRole(member, rawUserPayload = null, options = {
                 `Cargo "${role.name}" ADICIONADO a ${userLabel} (${userId}) por utilizar a tag do servidor.`
             );
 
-            if (!options.silentLog) {
+            if (!options.silentLog && config.tagLogChannelId) {
                 sendDiscordLog(client, {
+                    channelId: config.tagLogChannelId,
                     title: "🏷️ Cargo por Tag Adicionado",
                     action: "Tag do Servidor Ativada",
                     user: `${userLabel} (${userId})`,
@@ -338,8 +339,9 @@ async function reconcileMemberTagRole(member, rawUserPayload = null, options = {
                 `Cargo "${role.name}" REMOVIDO de ${userLabel} (${userId}) por remover/desativar a tag do servidor.`
             );
 
-            if (!options.silentLog) {
+            if (!options.silentLog && config.tagLogChannelId) {
                 sendDiscordLog(client, {
+                    channelId: config.tagLogChannelId,
                     title: "🏷️ Cargo por Tag Removido",
                     action: "Tag do Servidor Removida",
                     user: `${userLabel} (${userId})`,
