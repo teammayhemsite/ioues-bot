@@ -15,5 +15,18 @@ module.exports = {
     port: Number(process.env.PORT) || 3000,
     // Intervalos de reconexão de voz (ms)
     reconnectMinMs: 5000,
-    reconnectMaxMs: 60000
+    reconnectMaxMs: 60000,
+
+    // ==========================================
+    // SISTEMA AUTOMÁTICO DE CARGO POR TAG DO SERVIDOR (PRIMARY GUILD)
+    // ==========================================
+    // ID do servidor onde o cargo será gerenciado (reutiliza GUILD_ID ou permite definir TAG_GUILD_ID separado)
+    tagGuildId: process.env.TAG_GUILD_ID || process.env.GUILD_ID || "",
+    // Identificador da tag monitorada:
+    // Na API oficial do Discord (user.primary_guild), a tag é identificada pelo ID do servidor dono da tag (identity_guild_id).
+    // Se deixado em branco, o bot usará automaticamente o próprio ID do servidor (GUILD_ID).
+    // Você também pode preencher com o ID do servidor da tag (Snowflake) ou com o texto da tag (ex: "AEVX") caso queira filtrar pela sigla.
+    serverTagId: process.env.SERVER_TAG_ID || "",
+    // ID do cargo que será adicionado quando o membro ativar a tag e removido quando desativar
+    tagRoleId: process.env.TAG_ROLE_ID || "1555852510139383919"
 };
