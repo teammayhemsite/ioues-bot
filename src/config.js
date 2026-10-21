@@ -28,5 +28,7 @@ module.exports = {
     // Você também pode preencher com o ID do servidor da tag (Snowflake) ou com o texto da tag (ex: "AEVX") caso queira filtrar pela sigla.
     serverTagId: process.env.SERVER_TAG_ID || "",
     // ID do cargo que será adicionado quando o membro ativar a tag e removido quando desativar
-    tagRoleId: process.env.TAG_ROLE_ID || "1555852510139383919"
+    tagRoleId: process.env.TAG_ROLE_ID || "1555852510139383919",
+    // ID do canal exclusivo para logs de adição/remoção de cargo da tag
+    tagLogChannelId: process.env.TAG_LOG_CHANNEL_ID || "1559996459603075212"
 };
