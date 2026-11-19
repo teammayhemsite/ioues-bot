@@ -1,10 +1,5 @@
+const { EmbedBuilder } = require("discord.js");
 const config = require("./config");
-let EmbedBuilder;
-try {
-    EmbedBuilder = require("discord.js").EmbedBuilder;
-} catch (e) {
-    // EmbedBuilder será carregado quando discord.js estiver instalado
-}
 
 // Cores seguindo a identidade visual dos logs de referência
 const LOG_COLORS = {
@@ -15,12 +10,42 @@ const LOG_COLORS = {
     NEUTRAL: 0x2B2D31  // Escuro
 };
 
+// Limites oficiais de embeds do Discord
+const LIMITS = {
+    title: 256,
+    author: 256,
+    fieldName: 256,
+    fieldValue: 1024,
+    footer: 2048,
+    maxFields: 25
+};
+
+function truncate(value, max) {
+    const text = String(value ?? "");
+    return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function sanitizeFields(fields) {
+    if (!Array.isArray(fields)) return [];
+    return fields
+        .filter(f => f && f.name && f.value !== undefined && f.value !== null && String(f.value).trim() !== "")
+        .map(f => ({
+            name: truncate(f.name, LIMITS.fieldName),
+            value: truncate(f.value, LIMITS.fieldValue),
+            inline: Boolean(f.inline)
+        }));
+}
+
 /**
- * Envia um embed padronizado de log para o canal do Discord especificado
- * @param {import('discord.js').Client} client 
+ * Envia um embed padronizado de log para o canal do Discord especificado.
+ * Nunca lança exceções: retorna true/false.
+ *
+ * @param {import('discord.js').Client} client
  * @param {object} logData
+ * @param {string} [logData.channelId] Canal de destino (padrão: LOG_CHANNEL_ID)
+ * @param {Array}  [logData.files] Anexos opcionais (ex: transcript)
  */
-async function sendDiscordLog(client, logData) {
+async function sendDiscordLog(client, logData = {}) {
     if (!client || !client.isReady()) {
         console.warn("⚠️ [Aevix Logger] Discord client ainda não está pronto para enviar log.");
         return false;
@@ -47,53 +72,49 @@ async function sendDiscordLog(client, logData) {
             details,
             status = "SUCCESS",
             fields = [],
-            footer = "Aevix Security & Management"
+            footer = "Aevix Security & Management",
+            files = []
         } = logData;
 
         const color = LOG_COLORS[status] || LOG_COLORS.INFO;
 
-        // Construção do Embed estruturado idêntico às referências do Discord
         const embed = new EmbedBuilder()
             .setColor(color)
             .setTimestamp(new Date());
 
         if (title) {
-            embed.setTitle(title);
+            embed.setTitle(truncate(title, LIMITS.title));
         }
 
-        // Autor / Cabeçalho com ícone e nome do sistema/usuário
         embed.setAuthor({
-            name: `Aevix Keys • ${action || "Registro de Atividade"}`,
+            name: truncate(`Aevix Keys • ${action || "Registro de Atividade"}`, LIMITS.author),
             iconURL: client.user.displayAvatarURL()
         });
 
-        // Adiciona campos organizados
-        if (user) {
-            embed.addFields({ name: "👤 Usuário", value: `\`${user}\``, inline: true });
-        }
-        if (admin) {
-            embed.addFields({ name: "🛡️ Administrador", value: `\`${admin}\``, inline: true });
-        }
-        if (action) {
-            embed.addFields({ name: "⚡ Ação", value: `${action}`, inline: true });
-        }
+        const allFields = [];
+        if (user) allFields.push({ name: "👤 Usuário", value: `\`${user}\``, inline: true });
+        if (admin) allFields.push({ name: "🛡️ Administrador", value: `\`${admin}\``, inline: true });
+        if (action) allFields.push({ name: "⚡ Ação", value: `${action}`, inline: true });
+        if (details) allFields.push({ name: "📋 Detalhes", value: `${details}`, inline: false });
+        allFields.push(...(Array.isArray(fields) ? fields : []));
 
-        if (details) {
-            embed.addFields({ name: "📋 Detalhes", value: `${details}`, inline: false });
-        }
-
-        // Campos adicionais customizados
-        if (Array.isArray(fields) && fields.length > 0) {
-            embed.addFields(fields);
+        const safeFields = sanitizeFields(allFields).slice(0, LIMITS.maxFields);
+        if (safeFields.length > 0) {
+            embed.addFields(safeFields);
         }
 
         embed.setFooter({
-            text: `${footer} • ID do Evento: ${Math.floor(Date.now() / 1000)}`,
+            text: truncate(`${footer} • ID do Evento: ${Math.floor(Date.now() / 1000)}`, LIMITS.footer),
             iconURL: client.user.displayAvatarURL()
         });
 
-        await channel.send({ embeds: [embed] });
-        console.log(`✅ [Aevix Logger] Log enviado ao canal ${channelId}: ${action}`);
+        await channel.send({
+            embeds: [embed],
+            files: Array.isArray(files) ? files : [],
+            // Logs nunca devem mencionar/pingar ninguém
+            allowedMentions: { parse: [] }
+        });
+        console.log(`✅ [Aevix Logger] Log enviado ao canal ${channelId}: ${action || title || "sem título"}`);
         return true;
     } catch (err) {
         console.error("❌ [Aevix Logger] Erro ao enviar log para o Discord:", err.message);
@@ -103,5 +124,6 @@ async function sendDiscordLog(client, logData) {
 
 module.exports = {
     sendDiscordLog,
-    LOG_COLORS
+    LOG_COLORS,
+    truncate
 };
