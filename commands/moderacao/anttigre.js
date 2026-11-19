@@ -3,7 +3,9 @@ const {
     PermissionFlagsBits
 } = require("discord.js");
 
-const CANAL_AVISO_ID = "1559996459603075212";
+const config = require("../../src/config");
+const { EPHEMERAL, checkHierarchy } = require("../../src/utils/interactions");
+
 const SETE_DIAS_MS = 7 * 24 * 60 * 60 * 1000;
 const VINTE_QUATRO_HORAS_MS = 24 * 60 * 60 * 1000;
 
@@ -30,14 +32,14 @@ module.exports = {
         ) {
             return interaction.reply({
                 content: "❌ Apenas administradores podem usar este comando.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
 
         const usuario = interaction.options.getUser("usuario");
 
         await interaction.deferReply({
-            ephemeral: true
+            flags: EPHEMERAL
         });
 
         const membro = await interaction.guild.members
@@ -50,34 +52,20 @@ module.exports = {
             });
         }
 
-        const botMember = interaction.guild.members.me;
-
-        if (!botMember) {
+        const hierarchyError = checkHierarchy(interaction, membro, "aplicar castigo");
+        if (hierarchyError) {
             return interaction.editReply({
-                content: "❌ Não consegui verificar minhas permissões."
-            });
-        }
-
-        if (membro.id === interaction.guild.ownerId) {
-            return interaction.editReply({
-                content: "❌ Não é possível aplicar castigo no dono do servidor."
-            });
-        }
-
-        if (
-            membro.roles.highest.position >=
-            botMember.roles.highest.position
-        ) {
-            return interaction.editReply({
-                content: "❌ Meu cargo precisa estar acima do cargo desse usuário."
+                content: hierarchyError
             });
         }
 
         if (!membro.moderatable) {
             return interaction.editReply({
-                content: "❌ Não tenho permissão para aplicar castigo nesse usuário (ele pode ser Administrador)."
+                content: "❌ Não tenho permissão para aplicar castigo nesse usuário (ele pode ser Administrador ou possuir cargo protegido)."
             });
         }
+
+        const botMember = interaction.guild.members.me;
 
         try {
             // 1. Aplicar castigo (timeout) de 7 dias / 1 semana
@@ -90,7 +78,7 @@ module.exports = {
             const limiteTempo = Date.now() - VINTE_QUATRO_HORAS_MS;
             let totalApagadas = 0;
 
-            const canais = await interaction.guild.channels.fetch();
+            const canais = await interaction.guild.channels.fetch().catch(() => new Map());
 
             for (const [, canal] of canais) {
                 if (!canal || !canal.isTextBased() || !canal.messages) {
@@ -108,7 +96,9 @@ module.exports = {
                 }
 
                 try {
-                    const mensagens = await canal.messages.fetch({ limit: 100 });
+                    const mensagens = await canal.messages.fetch({ limit: 100 }).catch(() => null);
+                    if (!mensagens || mensagens.size === 0) continue;
+
                     const mensagensUsuario = mensagens.filter(
                         msg =>
                             msg.author.id === usuario.id &&
@@ -116,28 +106,33 @@ module.exports = {
                     );
 
                     if (mensagensUsuario.size > 0) {
-                        const apagadas = await canal.bulkDelete(mensagensUsuario, true);
-                        totalApagadas += apagadas.size;
+                        const apagadas = await canal.bulkDelete(mensagensUsuario, true).catch(() => null);
+                        if (apagadas) {
+                            totalApagadas += apagadas.size;
+                        }
                     }
                 } catch (err) {
                     // Ignora erro em canais individuais sem interromper os demais
                 }
             }
 
-            // 3. Enviar mensagem no canal 1559996459603075212 marcando o usuário
-            const canalAviso = await interaction.client.channels
-                .fetch(CANAL_AVISO_ID)
-                .catch(() => null);
+            // 3. Enviar mensagem no canal configurado marcando o usuário
+            const canalAvisoId = config.antTigreNoticeChannelId;
+            if (canalAvisoId) {
+                const canalAviso = await interaction.client.channels
+                    .fetch(canalAvisoId)
+                    .catch(() => null);
 
-            if (canalAviso && canalAviso.isTextBased()) {
-                await canalAviso.send({
-                    content: `Sem ficar divulgando tigrinho aqui! ${usuario}`
-                });
+                if (canalAviso && canalAviso.isTextBased()) {
+                    await canalAviso.send({
+                        content: `Sem ficar divulgando tigrinho aqui! ${usuario}`
+                    }).catch(() => {});
+                }
             }
 
             await interaction.editReply({
                 content:
-                    `🐯 **Punição aplicada em ${usuario.tag}!**\n` +
+                    `🐯 **Punição aplicada em ${usuario.tag || usuario.username}!**\n` +
                     `⏳ Castigo: **7 dias**\n` +
                     `🧹 Mensagens apagadas (últimas 24h): **${totalApagadas}**`
             });
