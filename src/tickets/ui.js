@@ -38,10 +38,7 @@ function buildPanel(guild, types) {
                 "**1.** Selecione no menu abaixo o tipo de atendimento desejado.",
                 "**2.** Um canal privado será criado só para você e a equipe.",
                 "**3.** Explique sua solicitação e aguarde o retorno da equipe.",
-                "",
-                "**📂 Tipos de atendimento**",
-                ...types.map(t => `${t.emoji} **${t.label}** — ${t.description}`),
-                "",
+                "",               
                 "> ⚠️ Abra tickets apenas quando necessário. Abusos podem resultar em punições."
             ].join("\n")
         )
