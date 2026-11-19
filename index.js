@@ -4,114 +4,31 @@ if (dns.setDefaultResultOrder) {
     dns.setDefaultResultOrder("ipv4first");
 }
 
-const config = require("./src/config");
-const { startVoice, stopVoice } = require("./src/voice");
-const { startTagRoleManager, stopTagRoleManager } = require("./src/tagRoleManager");
-
+const http = require("http");
+const https = require("https");
 const {
     Client,
     GatewayIntentBits,
-    Collection,
-    EmbedBuilder
+    Events
 } = require("discord.js");
 
-const fs = require("fs");
-const path = require("path");
-const http = require("http");
-
-// ==========================================
-// SISTEMA DE LOGS DO AEVIX KEYS (INTEGRADO)
-// ==========================================
-const LOG_COLORS = {
-    SUCCESS: 0x38D39F, // Verde
-    WARNING: 0xE8B65A, // Amarelo/Dourado
-    DANGER: 0xEF4444,  // Vermelho
-    INFO: 0x5865F2,    // Azul Discord
-    NEUTRAL: 0x2B2D31  // Escuro
-};
-
-async function sendDiscordLog(client, logData) {
-    if (!client || !client.isReady()) {
-        console.warn("⚠️ [Aevix Logger] Discord client ainda não está pronto para enviar log.");
-        return false;
-    }
-
-    const channelId = config.logChannelId || process.env.LOG_CHANNEL_ID || "1558873432769298522";
-
-    try {
-        const channel = await client.channels.fetch(channelId).catch(() => null);
-        if (!channel || !channel.isTextBased()) {
-            console.error(`❌ [Aevix Logger] Canal de logs não encontrado ou sem permissão: ${channelId}`);
-            return false;
-        }
-
-        const {
-            title,
-            action,
-            user,
-            admin,
-            details,
-            status = "SUCCESS",
-            fields = [],
-            footer = "Aevix Security & Management"
-        } = logData;
-
-        const color = LOG_COLORS[status] || LOG_COLORS.INFO;
-
-        const embed = new EmbedBuilder()
-            .setColor(color)
-            .setTimestamp(new Date());
-
-        if (title) {
-            embed.setTitle(title);
-        }
-
-        embed.setAuthor({
-            name: `Aevix Keys • ${action || "Registro de Atividade"}`,
-            iconURL: client.user.displayAvatarURL()
-        });
-
-        if (user) {
-            embed.addFields({ name: "👤 Usuário", value: `\`${user}\``, inline: true });
-        }
-        if (admin) {
-            embed.addFields({ name: "🛡️ Administrador", value: `\`${admin}\``, inline: true });
-        }
-        if (action) {
-            embed.addFields({ name: "⚡ Ação", value: `${action}`, inline: true });
-        }
-
-        if (details) {
-            embed.addFields({ name: "📋 Detalhes", value: `${details}`, inline: false });
-        }
-
-        if (Array.isArray(fields) && fields.length > 0) {
-            embed.addFields(fields);
-        }
-
-        embed.setFooter({
-            text: `${footer} • ID: ${Math.floor(Date.now() / 1000)}`,
-            iconURL: client.user.displayAvatarURL()
-        });
-
-        await channel.send({ embeds: [embed] });
-        console.log(`✅ [Aevix Logger] Log enviado ao canal ${channelId}: ${action}`);
-        return true;
-    } catch (err) {
-        console.error("❌ [Aevix Logger] Erro ao enviar log para o Discord:", err.message);
-        return false;
-    }
-}
+const config = require("./src/config");
+const { sendDiscordLog } = require("./src/logger");
+const { startVoice, stopVoice } = require("./src/voice");
+const { startTagRoleManager, stopTagRoleManager } = require("./src/tagRoleManager");
+const { startTickets, handleComponent, PREFIX: TICKET_PREFIX } = require("./src/tickets");
+const { loadCommands, toPayload } = require("./src/commandLoader");
+const { EPHEMERAL, safeReply } = require("./src/utils/interactions");
 
 // ==========================================
 // CONFIGURAÇÃO DO SERVIDOR HTTP
-// Necessário para o Render Web Service
+// Necessário para o Render Web Service + UptimeRobot
 // ==========================================
 
 const PORT = config.port;
 
 const server = http.createServer(async (req, res) => {
-    // Configura headers padrão e CORS para integração segura com o site
+    // Headers padrão e CORS para integração segura com o site/painel
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-aevix-secret");
@@ -122,13 +39,19 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && (req.url === "/" || req.url === "/health")) {
-        res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-        return res.end("OK - Aevix Discord Bot Online");
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        return res.end(JSON.stringify({
+            status: "online",
+            bot: client.user ? client.user.tag : "connecting",
+            ready: client.isReady(),
+            guilds: client.guilds.cache.size,
+            uptime: Math.floor(process.uptime()),
+            timestamp: new Date().toISOString()
+        }));
     }
 
     // Endpoint seguro para receber logs do backend / site Aevix Keys
     if (req.method === "POST" && req.url === "/api/log") {
-        // Validação de segurança via Secret configurado em AEVIX_LOG_SECRET se definido
         const reqSecret = req.headers["x-aevix-secret"] || req.headers["authorization"]?.replace("Bearer ", "");
         if (config.logApiSecret && reqSecret !== config.logApiSecret) {
             res.writeHead(401, { "Content-Type": "application/json" });
@@ -138,7 +61,7 @@ const server = http.createServer(async (req, res) => {
         let body = "";
         req.on("data", chunk => {
             body += chunk;
-            if (body.length > 1e5) { // Proteção contra payloads grandes
+            if (body.length > 1e5) { // Proteção contra payloads grandes (100KB)
                 req.destroy();
             }
         });
@@ -158,16 +81,12 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end("Not Found");
+    res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ error: "Not Found" }));
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-
-    console.log(
-        `🌐 Servidor HTTP iniciado na porta ${PORT}`
-    );
-
+    console.log(`🌐 Servidor HTTP iniciado na porta ${PORT}`);
 });
 
 // ==========================================
@@ -177,119 +96,19 @@ server.listen(PORT, "0.0.0.0", () => {
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers,    // necessário para monitorar membros e tag do servidor (Server Members Intent)
-        GatewayIntentBits.GuildVoiceStates // necessário para voz
+        GatewayIntentBits.GuildMembers,      // Necessário para moderação e tag do servidor (Server Members Intent)
+        GatewayIntentBits.GuildVoiceStates   // Necessário para permanência em canal de voz
     ]
 });
 
 // ==========================================
-// COLEÇÃO DE COMANDOS
+// CARREGAMENTO DOS COMANDOS
 // ==========================================
 
-client.commands = new Collection();
+client.commands = loadCommands({ verbose: true });
 
 // ==========================================
-// CARREGAR COMANDOS AUTOMATICAMENTE
-// ==========================================
-
-const commandsPath = path.join(
-    __dirname,
-    "commands"
-);
-
-function loadCommands(directory) {
-
-    if (!fs.existsSync(directory)) {
-
-        console.error(
-            `❌ Pasta de comandos não encontrada: ${directory}`
-        );
-
-        return;
-    }
-
-    const files = fs.readdirSync(directory);
-
-    for (const file of files) {
-
-        const fullPath = path.join(
-            directory,
-            file
-        );
-
-        const stat = fs.statSync(fullPath);
-
-        // ==========================================
-        // SE FOR UMA PASTA
-        // ==========================================
-
-        if (stat.isDirectory()) {
-
-            loadCommands(fullPath);
-
-            continue;
-        }
-
-        // ==========================================
-        // IGNORAR ARQUIVOS QUE NÃO SÃO JS
-        // ==========================================
-
-        if (!file.endsWith(".js")) {
-            continue;
-        }
-
-        try {
-
-            const command = require(fullPath);
-
-            // ==========================================
-            // VERIFICAR SE É UM COMANDO VÁLIDO
-            // ==========================================
-
-            if (
-                command.data &&
-                typeof command.execute === "function"
-            ) {
-
-                client.commands.set(
-                    command.data.name,
-                    command
-                );
-
-                console.log(
-                    `Comando carregado: ${command.data.name}`
-                );
-
-            } else {
-
-                console.log(
-                    `⚠️ Comando ignorado: ${file}`
-                );
-
-                console.log(
-                    `   O arquivo precisa possuir "data" e "execute".`
-                );
-            }
-
-        } catch (error) {
-
-            console.error(
-                `❌ Erro ao carregar o comando ${file}:`
-            );
-
-            console.error(error);
-        }
-    }
-}
-
-// ==========================================
-// INICIAR CARREGAMENTO
-// ==========================================
-
-loadCommands(commandsPath);
-
-// ==========================================
-// BOT CONECTADO (Disparado quando o Discord conecta)
+// INICIALIZAÇÃO DO BOT
 // ==========================================
 
 let isBotReady = false;
@@ -310,9 +129,9 @@ async function onBotReady() {
     console.log("========================================");
     console.log("");
 
-    // Registra/atualiza os comandos Slash automaticamente ao iniciar
+    // Registra/atualiza os comandos Slash automaticamente no servidor
     try {
-        const commandsPayload = client.commands.map(cmd => cmd.data.toJSON());
+        const commandsPayload = toPayload(client.commands);
 
         if (config.guildId) {
             const targetGuild = client.guilds.cache.get(config.guildId) || await client.guilds.fetch(config.guildId).catch(() => null);
@@ -334,223 +153,146 @@ async function onBotReady() {
     client.user.setPresence({
         activities: [
             {
-                name: "Gerenciando o servidor",
-                type: 3
+                name: "Central de Atendimento & Moderação",
+                type: 3 // Watching
             }
         ],
         status: "online"
     });
 
-    // Entra e permanece no canal de voz configurado
+    // 1. Entra e permanece no canal de voz configurado (24/7)
     try {
         startVoice(client);
     } catch (err) {
         console.error("❌ Erro ao iniciar voz:", err);
     }
 
-    // Inicia o sistema automático de cargo por tag do servidor (primary_guild)
+    // 2. Inicia o sistema automático de cargo por tag do servidor (primary_guild)
     try {
         startTagRoleManager(client);
     } catch (err) {
         console.error("❌ Erro ao iniciar gerenciamento de cargo por tag:", err);
     }
+
+    // 3. Inicia o sistema de tickets (reconciliação de canais, publicação de painel e contadores)
+    try {
+        await startTickets(client);
+    } catch (err) {
+        console.error("❌ Erro ao iniciar sistema de tickets:", err);
+    }
 }
 
-// Escuta evento de inicialização garantindo execução única
-client.once("clientReady", onBotReady);
-client.once("ready", onBotReady);
+// Escuta evento de inicialização de forma compatível
+client.once(Events.ClientReady, onBotReady);
 
 // ==========================================
-// INTERAÇÕES
+// TRATAMENTO DE INTERAÇÕES (Slash Commands + Tickets)
 // ==========================================
 
-client.on(
-    "interactionCreate",
-    async interaction => {
-        // SOMENTE COMANDOS SLASH
+client.on(Events.InteractionCreate, async interaction => {
+    try {
+        // 1. Roteamento de componentes do Sistema de Tickets (Menus e Botões com prefixo "ticket:")
+        if (
+            (interaction.isStringSelectMenu() || interaction.isButton()) &&
+            interaction.customId &&
+            interaction.customId.startsWith(TICKET_PREFIX)
+        ) {
+            return await handleComponent(interaction);
+        }
+
+        // 2. Comandos Slash
         if (!interaction.isChatInputCommand()) {
             return;
         }
 
-        console.log(`⚡ [Comando] /${interaction.commandName} executado por ${interaction.user.tag} no canal #${interaction.channel?.name || interaction.channelId}`);
+        console.log(`⚡ [Comando] /${interaction.commandName} executado por ${interaction.user.tag || interaction.user.username} no canal #${interaction.channel?.name || interaction.channelId}`);
 
         const command = client.commands.get(interaction.commandName);
 
-        // COMANDO NÃO ENCONTRADO
         if (!command) {
-            console.log(`⚠️ Comando não encontrado: ${interaction.commandName}`);
-            await interaction.reply({
-                content: "❌ Este comando não está registrado ou foi desativado.",
-                ephemeral: true
-            }).catch(() => {});
-            return;
+            console.warn(`⚠️ Comando não encontrado: ${interaction.commandName}`);
+            return await safeReply(interaction, "❌ Este comando não está registrado ou foi desativado.");
         }
 
-        try {
+        await command.execute(interaction);
 
-            await command.execute(
-                interaction
-            );
-
-        } catch (error) {
-
-            console.error(
-                `❌ Erro ao executar /${interaction.commandName}:`
-            );
-
-            console.error(error);
-
-            // ==========================================
-            // SE JÁ RESPONDEU
-            // ==========================================
-
-            if (
-                interaction.replied ||
-                interaction.deferred
-            ) {
-
-                await interaction.followUp({
-
-                    content:
-                        "❌ Ocorreu um erro ao executar este comando.",
-
-                    flags: 64
-
-                }).catch(() => {});
-
-            }
-
-            // ==========================================
-            // SE AINDA NÃO RESPONDEU
-            // ==========================================
-
-            else {
-
-                await interaction.reply({
-
-                    content:
-                        "❌ Ocorreu um erro ao executar este comando.",
-
-                    flags: 64
-
-                }).catch(() => {});
-
-            }
-        }
+    } catch (error) {
+        console.error(`❌ Erro ao executar /${interaction.commandName || "interação"}:`, error);
+        await safeReply(interaction, "❌ Ocorreu um erro ao processar esta ação. Tente novamente em instantes.");
     }
-);
+});
 
 // ==========================================
-// ERRO DO CLIENT DISCORD
+// TRATAMENTO DE ERROS GLOBAIS
 // ==========================================
 
-client.on(
-    "error",
-    error => {
+client.on("error", error => {
+    console.error("❌ Erro no Discord Client:", error);
+});
 
-        console.error(
-            "❌ Erro no Discord Client:"
-        );
+process.on("unhandledRejection", error => {
+    console.error("❌ Promise rejeitada não tratada:", error);
+});
 
-        console.error(error);
-
-    }
-);
-
-// ==========================================
-// PROMISE REJEITADA
-// ==========================================
-
-process.on(
-    "unhandledRejection",
-    error => {
-
-        console.error(
-            "❌ Promise rejeitada:"
-        );
-
-        console.error(error);
-
-    }
-);
+process.on("uncaughtException", error => {
+    console.error("❌ Exceção não tratada:", error);
+});
 
 // ==========================================
-// EXCEÇÃO NÃO TRATADA
-// ==========================================
-
-process.on(
-    "uncaughtException",
-    error => {
-
-        console.error(
-            "❌ Erro não tratado:"
-        );
-
-        console.error(error);
-
-    }
-);
-
-// ==========================================
-// VERIFICAR TOKEN
+// VERIFICAR TOKEN E INICIAR
 // ==========================================
 
 if (!config.token) {
-
-    console.error("");
-
-    console.error(
-        "❌ DISCORD_TOKEN NÃO CONFIGURADO!"
-    );
-
-    console.error("");
-
-    console.error(
-        "Configure DISCORD_TOKEN nas Environment Variables."
-    );
-
-    console.error("");
-
+    console.error("\n❌ DISCORD_TOKEN NÃO CONFIGURADO!\nConfigure DISCORD_TOKEN nas Environment Variables (Render ou .env).\n");
     process.exit(1);
 }
 
-// ==========================================
-// LOGIN NO DISCORD
-// ==========================================
+// Sanitiza o token (remove possíveis espaços, aspas acidentais ou prefixo 'Bot ')
+const rawToken = String(config.token).trim().replace(/^["']|["']$/g, '').replace(/^Bot\s+/i, '');
 
-// Logs de debug do cliente para monitorar o status da conexão no Render
-client.on("debug", info => {
-    if (info.includes("Heartbeat") || info.includes("heartbeat")) return; // Não polui os logs
-    console.log(`🌐 [Discord] ${info}`);
-});
+// Logs de diagnóstico de rede (apenas se DEBUG_DISCORD estiver ativado)
+if (config.debugDiscord) {
+    client.on("debug", info => {
+        if (info.includes("Heartbeat") || info.includes("heartbeat")) return;
+        console.log(`🌐 [Discord Debug] ${info}`);
+    });
+
+    client.rest.on("response", (req, res) => {
+        console.log(`🌐 [Discord REST] ${req.method} ${req.path} -> Status ${res.status}`);
+    });
+}
 
 client.on("warn", warning => {
     console.warn(`⚠️ [Discord Aviso] ${warning}`);
-});
-
-client.rest.on("response", (req, res) => {
-    console.log(`🌐 [Discord REST] ${req.method} ${req.path} -> Status ${res.status}`);
 });
 
 client.rest.on("rateLimited", rateLimitInfo => {
     console.warn(`⏳ [Discord Rate Limit] Limite atingido na rota ${rateLimitInfo.route}. Aguardando ${rateLimitInfo.timeToReset}ms.`);
 });
 
-// Sanitiza o token (remove possíveis espaços, aspas acidentais ou prefixo 'Bot ')
-const rawToken = config.token ? String(config.token).trim().replace(/^["']|["']$/g, '').replace(/^Bot\s+/i, '') : "";
-
-// Teste de conectividade direta com a API do Discord
-const https = require("https");
-const reqTest = https.get("https://discord.com/api/v10/gateway", { timeout: 10000 }, (resTest) => {
-    console.log(`🌐 [Teste de Conexão] Acesso a discord.com/api/v10/gateway: HTTP ${resTest.statusCode}`);
+// Teste de conectividade rápida com a API do Discord
+const reqTest = https.get("https://discord.com/api/v10/gateway", { timeout: 10000 }, resTest => {
+    console.log(`🌐 [Conexão] Discord Gateway acessível: HTTP ${resTest.statusCode}`);
 });
-reqTest.on("error", (err) => {
-    console.error(`❌ [Teste de Conexão] Não foi possível alcançar discord.com: ${err.message}`);
+reqTest.on("error", err => {
+    console.warn(`⚠️ [Conexão] Não foi possível testar https://discord.com: ${err.message}`);
 });
 reqTest.on("timeout", () => {
     reqTest.destroy();
-    console.error("❌ [Teste de Conexão] Tempo esgotado ao tentar alcançar discord.com (possível bloqueio de IP pelo Cloudflare ou falha de rota no host).");
+    console.warn("⚠️ [Conexão] Timeout ao testar gateway do Discord.");
 });
+
+// Timeout de segurança: se o bot não conectar em tempo hábil no Render, encerra para reiniciar o container
+if (config.readyTimeoutMs > 0) {
+    const readyTimeout = setTimeout(() => {
+        if (!isBotReady) {
+            console.error(`❌ [Timeout] O bot não conectou ao Discord dentro de ${Math.round(config.readyTimeoutMs / 1000)}s.`);
+            console.error("Reiniciando o processo para nova tentativa...");
+            process.exit(1);
+        }
+    }, config.readyTimeoutMs);
+    readyTimeout.unref();
+}
 
 console.log("🔑 Conectando ao Discord com o token configurado...");
 client.login(rawToken)
@@ -560,7 +302,7 @@ client.login(rawToken)
     .catch(error => {
         console.error("❌ ERRO FATAL AO FAZER LOGIN NO DISCORD:", error.message);
         if (error.message.includes("An invalid token was provided")) {
-            console.error("👉 Verifique se o DISCORD_TOKEN no Render está com o token correto e atualizado.");
+            console.error("👉 Verifique se o DISCORD_TOKEN está com o token correto e atualizado.");
         }
         if (error.message.includes("Used disallowed intents")) {
             console.error("👉 Ative a opção 'SERVER MEMBERS INTENT' em Discord Developer Portal -> Bot -> Privileged Gateway Intents.");
@@ -572,11 +314,11 @@ client.login(rawToken)
 // ==========================================
 
 function shutdown(signal) {
-    console.log(`${signal} recebido. Encerrando com segurança...`);
+    console.log(`\n🛑 ${signal} recebido. Encerrando com segurança...`);
     try { stopVoice(); } catch {}
     try { stopTagRoleManager(); } catch {}
-    server.close();
-    client.destroy();
+    try { server.close(); } catch {}
+    try { client.destroy(); } catch {}
     setTimeout(() => process.exit(0), 500).unref();
 }
 
