@@ -6,7 +6,9 @@ const {
 const {
     createEmbed,
     createButtons
-} = require("../../utils/embedUtils");
+} = require("../../../src/utils/embedUtils");
+
+const { EPHEMERAL } = require("../../../src/utils/interactions");
 
 module.exports = {
 
@@ -63,7 +65,7 @@ module.exports = {
     async execute(interaction) {
         // Responde imediatamente ao Discord para evitar o timeout de 3 segundos ("O aplicativo não respondeu")
         await interaction.deferReply({
-            ephemeral: true
+            flags: EPHEMERAL
         });
 
         const titulo =
@@ -107,7 +109,7 @@ module.exports = {
                 image: imagem,
                 author: interaction.guild?.name || "Aevix",
                 authorIcon: interaction.guild?.iconURL(),
-                footer: `Anúncio enviado por ${interaction.user.tag}`,
+                footer: `Anúncio enviado por ${interaction.user.tag || interaction.user.username}`,
                 timestamp: true
             });
 
