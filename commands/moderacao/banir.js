@@ -3,6 +3,8 @@ const {
     PermissionFlagsBits
 } = require("discord.js");
 
+const { EPHEMERAL, checkHierarchy } = require("../../src/utils/interactions");
+
 module.exports = {
 
     data: new SlashCommandBuilder()
@@ -39,41 +41,24 @@ module.exports = {
                 .catch(() => null);
 
         if (!membro) {
-
             return interaction.reply({
                 content: "❌ Esse usuário não está no servidor.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
 
-        const botMember =
-            interaction.guild.members.me;
-
-        if (!botMember) {
-
+        const hierarchyError = checkHierarchy(interaction, membro, "banir");
+        if (hierarchyError) {
             return interaction.reply({
-                content: "❌ Não consegui verificar minhas permissões.",
-                ephemeral: true
+                content: hierarchyError,
+                flags: EPHEMERAL
             });
         }
 
-        if (membro.id === interaction.guild.ownerId) {
-
+        if (!membro.bannable) {
             return interaction.reply({
-                content: "❌ Não é possível banir o dono do servidor.",
-                ephemeral: true
-            });
-        }
-
-        if (
-            membro.roles.highest.position >=
-            botMember.roles.highest.position
-        ) {
-
-            return interaction.reply({
-                content:
-                    "❌ Meu cargo precisa estar acima do cargo desse usuário.",
-                ephemeral: true
+                content: "❌ Não tenho permissão para banir esse usuário (ele pode possuir cargo superior ou protegido).",
+                flags: EPHEMERAL
             });
         }
 
@@ -81,23 +66,23 @@ module.exports = {
 
             await membro.ban({
                 reason:
-                    `${motivo} | Por ${interaction.user.tag}`
+                    `${motivo} | Por ${interaction.user.tag || interaction.user.username}`
             });
 
             await interaction.reply({
                 content:
-                    `🔨 **${usuario.tag}** foi banido.\n` +
+                    `🔨 **${usuario.tag || usuario.username}** foi banido.\n` +
                     `📝 Motivo: ${motivo}`
             });
 
         } catch (error) {
 
-            console.error(error);
+            console.error("❌ Erro ao banir usuário:", error);
 
             await interaction.reply({
                 content:
                     "❌ Não consegui banir esse usuário.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
     }
