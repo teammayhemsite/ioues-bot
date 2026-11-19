@@ -5,7 +5,9 @@ const {
 
 const {
     createEmbed
-} = require("../../utils/embedUtils");
+} = require("../../../src/utils/embedUtils");
+
+const { EPHEMERAL } = require("../../../src/utils/interactions");
 
 module.exports = {
 
@@ -65,14 +67,22 @@ module.exports = {
             timestamp: true
         });
 
-        await interaction.channel.send({
-            content: `${usuario}`,
-            embeds: [embed]
-        });
+        try {
+            await interaction.channel.send({
+                content: `${usuario}`,
+                embeds: [embed]
+            });
 
-        await interaction.reply({
-            content: "✅ Mensagem de boas-vindas enviada!",
-            ephemeral: true
-        });
+            await interaction.reply({
+                content: "✅ Mensagem de boas-vindas enviada!",
+                flags: EPHEMERAL
+            });
+        } catch (error) {
+            console.error("❌ Erro ao enviar mensagem de boas-vindas:", error);
+            await interaction.reply({
+                content: "❌ Não foi possível enviar a mensagem no canal. Verifique minhas permissões.",
+                flags: EPHEMERAL
+            });
+        }
     }
 };
