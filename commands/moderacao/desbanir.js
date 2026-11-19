@@ -3,6 +3,8 @@ const {
     PermissionFlagsBits
 } = require("discord.js");
 
+const { EPHEMERAL } = require("../../src/utils/interactions");
+
 module.exports = {
 
     data: new SlashCommandBuilder()
@@ -26,8 +28,8 @@ module.exports = {
         if (!/^\d{17,20}$/.test(id)) {
 
             return interaction.reply({
-                content: "❌ Informe um ID de usuário válido.",
-                ephemeral: true
+                content: "❌ Informe um ID de usuário válido (17 a 20 números).",
+                flags: EPHEMERAL
             });
         }
 
@@ -35,7 +37,7 @@ module.exports = {
 
             await interaction.guild.members.unban(
                 id,
-                `Desbanido por ${interaction.user.tag}`
+                `Desbanido por ${interaction.user.tag || interaction.user.username}`
             );
 
             await interaction.reply({
@@ -45,12 +47,12 @@ module.exports = {
 
         } catch (error) {
 
-            console.error(error);
+            console.error("❌ Erro ao desbanir usuário:", error);
 
             await interaction.reply({
                 content:
                     "❌ Esse usuário não está banido ou não foi possível desbanir.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
     }
