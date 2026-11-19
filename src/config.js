@@ -112,7 +112,7 @@ module.exports = {
             {
                 id: "compras",
                 label: "Comprar",
-                emoji: "🛒",
+                emoji: "<:loja:1573035694572445746>",
                 description: "Para usuários interessados em comprar produtos.",
                 categoryId: env("TICKET_CATEGORY_COMPRAS", "1572982188096356445"),
                 categoryNameHints: ["compra", "venda", "loja"],
@@ -122,7 +122,7 @@ module.exports = {
             {
                 id: "suporte",
                 label: "Suporte",
-                emoji: "🎧",
+                emoji: "<:suporte:1573035780102684903>",
                 description: "Precisa de ajuda, tem dúvidas ou está enfrentando algum problema.",
                 categoryId: env("TICKET_CATEGORY_SUPORTE", "1572981922009841665"),
                 categoryNameHints: ["suporte", "ajuda"],
@@ -142,7 +142,7 @@ module.exports = {
             {
                 id: "parcerias",
                 label: "Parcerias",
-                emoji: "🤝",
+                emoji: "<:parceria:1573035876554899456>",
                 description: "Interessado em estabelecer uma parceria com o servidor.",
                 // Pendente: defina TICKET_CATEGORY_PARCERIAS. Se vazio, o bot procura uma categoria
                 // cujo nome contenha "parceria" e, se não encontrar, avisa que a opção está indisponível.
