@@ -3,6 +3,8 @@ const {
     PermissionFlagsBits
 } = require("discord.js");
 
+const { EPHEMERAL, checkHierarchy, checkRoleManageable } = require("../../src/utils/interactions");
+
 module.exports = {
 
     data: new SlashCommandBuilder()
@@ -43,32 +45,24 @@ module.exports = {
         if (!membro) {
 
             return interaction.reply({
-                content: "❌ Usuário não encontrado.",
-                ephemeral: true
+                content: "❌ Usuário não encontrado no servidor.",
+                flags: EPHEMERAL
             });
         }
 
-        const botMember =
-            interaction.guild.members.me;
-
-        if (
-            cargo.position >=
-            botMember.roles.highest.position
-        ) {
-
+        const roleError = checkRoleManageable(interaction, cargo);
+        if (roleError) {
             return interaction.reply({
-                content:
-                    "❌ Meu cargo precisa estar acima do cargo que será atribuído.",
-                ephemeral: true
+                content: roleError,
+                flags: EPHEMERAL
             });
         }
 
-        if (cargo.managed) {
-
+        const hierarchyError = checkHierarchy(interaction, membro, "atribuir cargo a");
+        if (hierarchyError) {
             return interaction.reply({
-                content:
-                    "❌ Esse cargo é gerenciado por uma integração e não pode ser atribuído.",
-                ephemeral: true
+                content: hierarchyError,
+                flags: EPHEMERAL
             });
         }
 
@@ -77,7 +71,7 @@ module.exports = {
             return interaction.reply({
                 content:
                     `⚠️ ${usuario} já possui o cargo ${cargo}.`,
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
 
@@ -85,7 +79,7 @@ module.exports = {
 
             await membro.roles.add(
                 cargo,
-                `Cargo adicionado por ${interaction.user.tag}`
+                `Cargo adicionado por ${interaction.user.tag || interaction.user.username}`
             );
 
             await interaction.reply({
@@ -95,12 +89,12 @@ module.exports = {
 
         } catch (error) {
 
-            console.error(error);
+            console.error("❌ Erro ao adicionar cargo:", error);
 
             await interaction.reply({
                 content:
-                    "❌ Não consegui adicionar o cargo.",
-                ephemeral: true
+                    "❌ Não consegui adicionar o cargo. Verifique minhas permissões e hierarquia.",
+                flags: EPHEMERAL
             });
         }
     }
