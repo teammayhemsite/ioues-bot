@@ -6,7 +6,9 @@ const {
 const {
     createEmbed,
     createButtons
-} = require("../../utils/embedUtils");
+} = require("../../../src/utils/embedUtils");
+
+const { EPHEMERAL } = require("../../../src/utils/interactions");
 
 module.exports = {
 
@@ -145,7 +147,7 @@ module.exports = {
             return interaction.reply({
                 content:
                     "❌ Cor inválida. Use o formato `#5865F2`.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
 
@@ -157,7 +159,7 @@ module.exports = {
             return interaction.reply({
                 content:
                     "❌ Para criar um botão, informe `botao` e `botao_url`.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
 
@@ -185,14 +187,22 @@ module.exports = {
                 : []
         );
 
-        await interaction.channel.send({
-            embeds: [embed],
-            components
-        });
+        try {
+            await interaction.channel.send({
+                embeds: [embed],
+                components
+            });
 
-        await interaction.reply({
-            content: "✅ Embed enviada!",
-            ephemeral: true
-        });
+            await interaction.reply({
+                content: "✅ Embed enviada!",
+                flags: EPHEMERAL
+            });
+        } catch (error) {
+            console.error("❌ Erro ao enviar embed personalizada:", error);
+            await interaction.reply({
+                content: "❌ Não foi possível enviar a embed no canal. Verifique minhas permissões.",
+                flags: EPHEMERAL
+            });
+        }
     }
 };
