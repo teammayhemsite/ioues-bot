@@ -1,191 +1,46 @@
+const { REST, Routes } = require("discord.js");
 const config = require("./src/config");
-
-const {
-    REST,
-    Routes
-} = require("discord.js");
-
-const fs = require("fs");
-const path = require("path");
-
-// ==========================================
-// CONFIGURAÇÕES
-// ==========================================
+const { loadCommands, toPayload } = require("./src/commandLoader");
 
 const token = config.token;
 const clientId = config.clientId;
 const guildId = config.guildId;
 
-// ==========================================
-// VALIDAÇÃO
-// ==========================================
-
 if (!token) {
-
-    console.error("");
-    console.error("❌ DISCORD_TOKEN não encontrado!");
-    console.error("Verifique o arquivo .env");
-    console.error("");
-
+    console.error("\n❌ DISCORD_TOKEN não encontrado! Verifique o arquivo .env ou as variáveis do Render.\n");
     process.exit(1);
 }
 
 if (!clientId) {
-
-    console.error("");
-    console.error("❌ CLIENT_ID não encontrado!");
-    console.error("Verifique o arquivo .env");
-    console.error("");
-
+    console.error("\n❌ CLIENT_ID não encontrado! Verifique o arquivo .env ou as variáveis do Render.\n");
     process.exit(1);
 }
 
-if (!guildId) {
+const commandsMap = loadCommands({ verbose: true });
+const commands = toPayload(commandsMap);
 
-    console.error("");
-    console.error("❌ GUILD_ID não encontrado!");
-    console.error("Verifique o arquivo .env");
-    console.error("");
-
-    process.exit(1);
-}
-
-// ==========================================
-// COLETA DE COMANDOS
-// ==========================================
-
-const commands = [];
-
-const commandsPath = path.join(
-    __dirname,
-    "commands"
-);
-
-function loadCommands(directory) {
-
-    if (!fs.existsSync(directory)) {
-
-        console.error(
-            `❌ Pasta não encontrada: ${directory}`
-        );
-
-        return;
-    }
-
-    const files = fs.readdirSync(directory);
-
-    for (const file of files) {
-
-        const fullPath = path.join(
-            directory,
-            file
-        );
-
-        const stat = fs.statSync(fullPath);
-
-        // Se for pasta, entrar nela
-        if (stat.isDirectory()) {
-
-            loadCommands(fullPath);
-
-            continue;
-        }
-
-        // Ignorar arquivos que não sejam JS
-        if (!file.endsWith(".js")) {
-            continue;
-        }
-
-        try {
-
-            const command = require(fullPath);
-
-            if (
-                command.data &&
-                typeof command.execute === "function"
-            ) {
-
-                commands.push(
-                    command.data.toJSON()
-                );
-
-            } else {
-
-                console.log(
-                    `⚠️ Arquivo ignorado: ${file}`
-                );
-
-            }
-
-        } catch (error) {
-
-            console.error(
-                `❌ Erro ao carregar ${file}:`
-            );
-
-            console.error(error);
-
-        }
-    }
-}
-
-// ==========================================
-// CARREGAR COMANDOS
-// ==========================================
-
-loadCommands(commandsPath);
-
-// ==========================================
-// DISCORD REST
-// ==========================================
-
-const rest = new REST({
-    version: "10"
-}).setToken(token);
-
-// ==========================================
-// REGISTRAR COMANDOS
-// ==========================================
+const rest = new REST({ version: "10" }).setToken(token);
 
 (async () => {
-
     try {
+        console.log(`\n⏳ Registrando ${commands.length} comando(s) no Discord...`);
 
-        console.log("");
-        console.log(
-            `Registrando ${commands.length} comandos...`
-        );
-
-        await rest.put(
-
-            Routes.applicationGuildCommands(
-                clientId,
-                guildId
-            ),
-
-            {
-                body: commands
-            }
-
-        );
-
-        console.log(
-            "✅ Comandos registrados com sucesso!"
-        );
-
-        console.log(
-            `📦 Total: ${commands.length}`
-        );
-
+        if (guildId) {
+            await rest.put(
+                Routes.applicationGuildCommands(clientId, guildId),
+                { body: commands }
+            );
+            console.log(`✅ ${commands.length} comando(s) registrados com sucesso no servidor (${guildId})!`);
+        } else {
+            console.log("ℹ️ GUILD_ID não configurado. Registrando comandos globalmente...");
+            await rest.put(
+                Routes.applicationCommands(clientId),
+                { body: commands }
+            );
+            console.log(`✅ ${commands.length} comando(s) registrados globalmente com sucesso!`);
+        }
     } catch (error) {
-
-        console.error("");
-        console.error(
-            "❌ Erro ao registrar os comandos:"
-        );
-
-        console.error(error);
-
+        console.error("\n❌ Erro ao registrar comandos no Discord:", error);
+        process.exit(1);
     }
-
 })();
