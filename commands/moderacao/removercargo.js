@@ -3,6 +3,8 @@ const {
     PermissionFlagsBits
 } = require("discord.js");
 
+const { EPHEMERAL, checkHierarchy, checkRoleManageable } = require("../../src/utils/interactions");
+
 module.exports = {
 
     data: new SlashCommandBuilder()
@@ -43,23 +45,24 @@ module.exports = {
         if (!membro) {
 
             return interaction.reply({
-                content: "❌ Usuário não encontrado.",
-                ephemeral: true
+                content: "❌ Usuário não encontrado no servidor.",
+                flags: EPHEMERAL
             });
         }
 
-        const botMember =
-            interaction.guild.members.me;
-
-        if (
-            cargo.position >=
-            botMember.roles.highest.position
-        ) {
-
+        const roleError = checkRoleManageable(interaction, cargo);
+        if (roleError) {
             return interaction.reply({
-                content:
-                    "❌ Meu cargo precisa estar acima desse cargo.",
-                ephemeral: true
+                content: roleError,
+                flags: EPHEMERAL
+            });
+        }
+
+        const hierarchyError = checkHierarchy(interaction, membro, "remover cargo de");
+        if (hierarchyError) {
+            return interaction.reply({
+                content: hierarchyError,
+                flags: EPHEMERAL
             });
         }
 
@@ -68,7 +71,7 @@ module.exports = {
             return interaction.reply({
                 content:
                     `⚠️ ${usuario} não possui o cargo ${cargo}.`,
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
 
@@ -76,7 +79,7 @@ module.exports = {
 
             await membro.roles.remove(
                 cargo,
-                `Cargo removido por ${interaction.user.tag}`
+                `Cargo removido por ${interaction.user.tag || interaction.user.username}`
             );
 
             await interaction.reply({
@@ -86,12 +89,12 @@ module.exports = {
 
         } catch (error) {
 
-            console.error(error);
+            console.error("❌ Erro ao remover cargo:", error);
 
             await interaction.reply({
                 content:
-                    "❌ Não consegui remover o cargo.",
-                ephemeral: true
+                    "❌ Não consegui remover o cargo. Verifique minhas permissões e hierarquia.",
+                flags: EPHEMERAL
             });
         }
     }
