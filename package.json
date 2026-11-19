@@ -1,16 +1,19 @@
 {
   "name": "discord-bot",
-  "version": "1.0.0",
-  "description": "Bot Discord de moderação e mensagens personalizadas",
+  "version": "1.1.0",
+  "description": "Bot Discord completo: moderação, tickets automáticos, permanência em voz 24/7 e receptor de logs Aevix Keys",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "deploy": "node deploy-commands.js"
+    "deploy": "node deploy-commands.js",
+    "test": "node test/ticketSystem.test.js"
   },
   "keywords": [
     "discord",
     "bot",
-    "discordjs"
+    "discordjs",
+    "tickets",
+    "moderation"
   ],
   "author": "Krpris",
   "license": "MIT",
@@ -20,6 +23,6 @@
     "dotenv": "^17.4.2"
   },
   "engines": {
-    "node": "20.x"
+    "node": ">=20.0.0"
   }
 }
