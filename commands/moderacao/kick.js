@@ -3,6 +3,8 @@ const {
     PermissionFlagsBits
 } = require("discord.js");
 
+const { EPHEMERAL, checkHierarchy } = require("../../src/utils/interactions");
+
 module.exports = {
 
     data: new SlashCommandBuilder()
@@ -42,45 +44,45 @@ module.exports = {
 
             return interaction.reply({
                 content: "❌ Esse usuário não está no servidor.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
 
-        const botMember =
-            interaction.guild.members.me;
-
-        if (
-            membro.roles.highest.position >=
-            botMember.roles.highest.position
-        ) {
-
+        const hierarchyError = checkHierarchy(interaction, membro, "expulsar");
+        if (hierarchyError) {
             return interaction.reply({
-                content:
-                    "❌ Meu cargo precisa estar acima do cargo desse usuário.",
-                ephemeral: true
+                content: hierarchyError,
+                flags: EPHEMERAL
+            });
+        }
+
+        if (!membro.kickable) {
+            return interaction.reply({
+                content: "❌ Não tenho permissão para expulsar esse usuário (ele pode possuir cargo superior ou protegido).",
+                flags: EPHEMERAL
             });
         }
 
         try {
 
             await membro.kick(
-                `${motivo} | Por ${interaction.user.tag}`
+                `${motivo} | Por ${interaction.user.tag || interaction.user.username}`
             );
 
             await interaction.reply({
                 content:
-                    `👢 **${usuario.tag}** foi expulso.\n` +
+                    `👢 **${usuario.tag || usuario.username}** foi expulso.\n` +
                     `📝 Motivo: ${motivo}`
             });
 
         } catch (error) {
 
-            console.error(error);
+            console.error("❌ Erro ao expulsar usuário:", error);
 
             await interaction.reply({
                 content:
                     "❌ Não consegui expulsar esse usuário.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
     }
